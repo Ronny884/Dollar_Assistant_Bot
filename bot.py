@@ -103,9 +103,8 @@ async def start_command(message):
         bot.telegram_client.post(method='sendMessage', params={'text': f'Новый пользователь: {username}, id {user_id}',
                                                                'chat_id': ADMIN_CHAT_ID})
 
+    user.set_default_info(int(user_id))
     await cancel.cancel_all_settings(bot, message, from_start=True)
-
-    user.set_default_info(user_id)
     default_markup = markup_creator.create_default_markup()
     text = 'Dollar Assistant BY - бот для получения актуального курса доллара.' \
                     '\n' \
