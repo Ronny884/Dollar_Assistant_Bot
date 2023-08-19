@@ -1,14 +1,12 @@
-import time
-import re
-import requests
 import asyncio
 import aiohttp
 import telebot
-from datetime import datetime, timedelta
+from datetime import datetime
 from envparse import Env
 from telebot import types
 from telebot.async_telebot import AsyncTeleBot
 
+from user_info import User
 from markups import MarkupCreator, MarkupSetter
 from exchange_getting import ExchangeGetter
 from valid import Validator
@@ -21,26 +19,6 @@ from automatic_recovery import Restorer
 from massage_handler_operations import MessageHandlerOperator
 from telegram_client import TelegramClient
 from database_operations import DataBaseClient, UserActioner
-
-
-class User:
-    info = {}
-
-    def set_default_info(self, user_id):
-        self.info[user_id] = {'task_2': lambda msg, sec: asyncio.create_task(
-            coroutine_creator.form_the_coroutine_for_time_reminders(bot, msg, sec)),
-                              'task_2_object': None,
-
-                              'task_3': lambda msg, delta, rest: asyncio.create_task(
-                                  coroutine_creator.form_the_coroutine_for_delta_reminders(bot, msg, delta, rest)),
-                              'task_3_object': None,
-
-                              'time_interval_str': None,
-                              'delta_str': None,
-
-                              'setting the time for notifications once a day': False,
-                              'setting the time for notifications by own configuration': False,
-                              'setting own delta': False}
 
 
 user = User()
@@ -94,8 +72,7 @@ class MyBot(AsyncTeleBot):
 
 tg_client = TelegramClient(token=TOKEN, base_url='https://api.telegram.org')
 bot = MyBot(token=TOKEN, telegram_client=tg_client)
-
-restorer = Restorer(bot, user, task_setter)
+restorer = Restorer(bot, user, task_setter, calculator, coroutine_creator)
 
 
 async def func_restore():
@@ -120,25 +97,73 @@ async def start_command(message):
     """
     user_id = message.chat.id
     username = message.from_user.username
-    create_new_user = False
     user_exists = bot.user_actioner.get_user(user_id)
     if not user_exists:
         bot.user_actioner.create_user(user_id, username, None, None, None)
-        bot.telegram_client.post(method='sendMessage', params={'text': f'Новый пользователь: {user_id}',
+        bot.telegram_client.post(method='sendMessage', params={'text': f'Новый пользователь: {username}, id {user_id}',
                                                                'chat_id': ADMIN_CHAT_ID})
-        create_new_user = True
 
     await cancel.cancel_all_settings(bot, message, from_start=True)
 
     user.set_default_info(user_id)
     default_markup = markup_creator.create_default_markup()
-    await bot.send_message(user_id, f'{"Вы добавлены в базу" if create_new_user else "Бот перезапущен, настройки сброшены"}',
-                           reply_markup=default_markup)
+    text = 'Dollar Assistant BY - бот для получения актуального курса доллара.' \
+                    '\n' \
+                    '\n<b>Команды</b>' \
+                    '\n/start - перезапуск и сброс настроек' \
+                    '\n/help - подробное описание бота' \
+                    '\n/info - информация о ваших текущих настройках'
+    await bot.send_message(user_id, text, reply_markup=default_markup, parse_mode='HTML')
 
 
 @bot.message_handler(commands=['help'])
-async def help_command():
-    pass
+async def help_command(message):
+    text = 'Dollar Assistant BY - это бот в Telegram, позоляющий получать актуальную информацию о курсе ' \
+           'доллара по отношению к белорусскому рублю.\n ' \
+           '\nЕсли вам нужно сиюминутно узнать курс - нажмите кнопку ' \
+           '"Текущий курс доллара". Если требуется получать уведомления, то, нажав кнопку "Настроить уведомления", вы ' \
+           'можете настроить их отправку в соответствии с удобной для вас конфигурацией.' \
+           '\n' \
+           '\n<b>Виды уведомлений</b>' \
+           '\n' \
+           '\n⏱ Временные уведомления. Приходят вам регулярно с определённой, настроенной вами частотой ' \
+           '(20 минут, час, день и т.д.).' \
+           '\n' \
+           '\n💲 Уведомления об изменении курса. Бот постоянно мониторит курс доллара и в случае изменения её на ' \
+           'какую-либо фиксированную величину присылает вам об этом уведомление. Значение этой величины вы ' \
+           'настраиваете сами так же, как и частоту для предыдущего вида уведомлений.' \
+           '\n' \
+           '\n<b>Важные моменты</b>' \
+           '\n' \
+           '\n📩 Вы можете использовать как один из видов уведомлений, так и оба сразу.' \
+           '\n' \
+           '\n🏦 Информация о курсе берётся из раздела "Лучшие курсы" на официальном сайте myfin.by. ' \
+           'Если по каким-либо причинам этот сайт не доступен, бот делает запрос для получения курса на официальный ' \
+           'сайт Беларусбанка.' \
+           '\n' \
+           '\n💰 При подсчёте величины изменения курса вычисления ведутся относительно стоимости доллара при покупке.' \
+           '\n' \
+           '\n🌍 Бот работает в часовом поясе GMT+3 (Москва). Это важно иметь в виду при установке ежедневных ' \
+           'уведомлений. Если вы находитесь в другом часовом поясе, то во избежание некорректной ' \
+           'работы бота вам следует отдать предпочтение другим вариациям временных уведомлений' \
+           '\n' \
+           '\n<b>Команды</b>' \
+           '\n/start - перезапуск и сброс настроек' \
+           '\n/help - подробное описание бота' \
+           '\n/info - информация о ваших текущих настройках.'
+
+    await bot.send_message(message.chat.id, text, parse_mode='HTML')
+
+
+@bot.message_handler(commands=['info'])
+async def help_command(message):
+    await markup_setter.set_start_markup_to_set_reminders(bot=bot,
+                                                          task_2=user.info[message.chat.id]['task_2_object'],
+                                                          task_3=user.info[message.chat.id]['task_3_object'],
+                                                          message=message,
+                                                          time_interval=user.info[message.chat.id]['time_interval_str'],
+                                                          delta=user.info[message.chat.id]['delta_str'],
+                                                          for_info=True)
 
 
 @bot.message_handler()

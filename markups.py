@@ -11,7 +11,7 @@ class MarkupCreator:
     @staticmethod
     def create_default_markup():
         """
-        Дефолтная панель, что появляется внизу и не исчезает
+        Дефолтная панель, что появляется внизу
         """
         markup_with_reminders = types.ReplyKeyboardMarkup(resize_keyboard=True)
         btn_get_exchange = types.KeyboardButton('Текущий курс доллара 💵')
@@ -78,9 +78,20 @@ class MarkupCreator:
 
 
 class MarkupSetter(MarkupCreator):
-    async def set_start_markup_to_set_reminders(self, bot, task_2, task_3, message, time_interval=None, delta=None):
+    def __init__(self):
+        self.end_text = 'Можете изменить конфигурацию в соответствии с вашими нуждами'
+
+    async def set_start_markup_to_set_reminders(self, bot, task_2, task_3, message,
+                                                time_interval=None, delta=None, for_info=False):
+        """
+        Установка inline-панели для выбора вариации временных уведомлений, а так же, в случае вызова
+        при команде /info, вывод текста с онформации о текущих настройках пользователя
+        """
         message_dir = {
-            (task_2 is None and task_3 is None): 'На данный момент у вас не установлены уведомления о курсе доллара. '
+            (task_2 is None and task_3 is None and for_info):
+                           'На данный момент у вас не установлены уведомления о курсе доллара. ',
+
+            (task_2 is None and task_3 is None and for_info is False): 'На данный момент у вас не установлены уведомления о курсе доллара. '
                                                  'Давайте это исправим!\n'
                                                  '\n'
                                                  '⏱ Вы можете установить удобную частоту, с которой бот будет присылать вам уведомления '
@@ -92,32 +103,34 @@ class MarkupSetter(MarkupCreator):
                                                  '(кнопка "Установить изменение курса").\n'
                                                  '\n'
                                                  'Допускается использование как одного из типов уведомлений, так и обоих сразу',
-            (
-                        task_2 is None and task_3 is not None): f'На данный момент у вас установлены уведомления о каждом изменении '
+
+            (task_2 is None and task_3 is not None): f'На данный момент у вас установлены уведомления о каждом изменении '
                                                                 f'курса на {delta} BYN.\n'
-                                                                f'\n'
-                                                                f'Можете изменить конфигурацию в соответствии с вашими нуждами',
-            (
-                        task_2 is not None and task_3 is None): f'На данный момент у вас установлены временные уведомления о курсе '
+                                                                f'\n',
+
+            (task_2 is not None and task_3 is None): f'На данный момент у вас установлены временные уведомления о курсе '
                                                                 f'доллара с интервалом '
                                                                 f'в {time_interval}.\n'
-                                                                f'\n'
-                                                                f'Можете изменить конфигурацию уведомлений в соответствии с '
-                                                                f'вашими нуждами',
+                                                                f'\n',
+
             (task_2 is not None and task_3 is not None): f'На данный момент у вас установлены временные уведомления '
                                                          f'о курсе доллара с интервалом '
                                                          f'в {time_interval}, а так же уведомления о каждом изменении курса '
                                                          f'на {delta} BYN.\n'
                                                          f'\n'
-                                                         f'Можете изменить конфигурацию уведомлений '
-                                                         f'в соответствии с вашими нуждами'
+
         }
-        start_markup_to_set_reminders = self.create_start_markup_to_set_reminders(task_2, task_3)
         for condition in message_dir:
             if condition:
-                await bot.send_message(message.chat.id, message_dir[condition],
-                                       reply_markup=start_markup_to_set_reminders)
-                break
+                if for_info:
+                    default_markup = self.create_default_markup()
+                    await bot.send_message(message.chat.id, message_dir[condition], reply_markup=default_markup)
+                    break
+                else:
+                    start_markup_to_set_reminders = self.create_start_markup_to_set_reminders(task_2, task_3)
+                    await bot.send_message(message.chat.id, f'{message_dir[condition]}{self.end_text}',
+                                           reply_markup=start_markup_to_set_reminders)
+                    break
 
     async def set_markup_to_set_the_time(self, bot, message):
         """

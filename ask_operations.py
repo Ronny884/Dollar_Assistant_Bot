@@ -10,7 +10,7 @@ class Ask:
         """
         self.user.info[message.chat.id]['setting the time for notifications once a day'] = True
         await bot.delete_message(message.chat.id, message.id)
-        await bot.send_message(message.chat.id, 'Укажите конкретное время, когда боту следует '
+        await bot.send_message(message.chat.id, 'Укажите конкретное время (МСК), когда боту следует '
                                                 'присылать вам уведомление '
                                                 '(используйте следующий формат: 9:00, 16:30 и т.д.)')
 
@@ -24,6 +24,9 @@ class Ask:
                                                 'вам должны приходить уведомления о курсе доллара')
 
     async def ask_about_own_delta(self, bot, message):
+        """
+        Уточняем удобное изменение курса для уведомлений
+        """
         self.user.info[message.chat.id]['setting own delta'] = True
         await bot.delete_message(message.chat.id, message.id)
         await bot.send_message(message.chat.id, 'Укажите необходимую величину изменения курса '
